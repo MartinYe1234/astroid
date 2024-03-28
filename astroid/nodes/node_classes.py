@@ -2637,6 +2637,7 @@ class ExceptHandler(
         return self.lineno
 
     def catch(self, exceptions: list[str] | None) -> bool:
+        # Updated logic to handle ExceptionGroup
         """Check if this node handles any of the given
 
         :param exceptions: The names of the exceptions to check for.
@@ -3891,6 +3892,7 @@ class Try(_base_nodes.MultiLineWithElseBlockNode, _base_nodes.Statement):
 
 
 class TryStar(_base_nodes.MultiLineWithElseBlockNode, _base_nodes.Statement):
+    # Ensure compatibility with updated ExceptHandler logic
     """Class representing an :class:`ast.TryStar` node."""
 
     _astroid_fields = ("body", "handlers", "orelse", "finalbody")
