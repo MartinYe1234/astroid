@@ -6,6 +6,24 @@
 where it makes sense.
 """
 
+def get_exception_group_matching_exceptions(
+    exception_group: nodes.ClassDef,
+    match_types: list[nodes.ClassDef]
+) -> list[nodes.ClassDef]:
+    """
+    Return a list of exception types within the given ExceptionGroup that match
+    one of the exception types in match_types.
+    """
+    matching_exceptions = []
+    
+    for exception_type in exception_group.args[0].infer():
+        for match_type in match_types:
+            if exception_type.is_subtype_of(match_type):
+                matching_exceptions.append(exception_type)
+                break
+
+    return matching_exceptions
+
 from __future__ import annotations
 
 import collections
