@@ -25,7 +25,8 @@ from typing import (
     Union,
 )
 
-from astroid import decorators, protocols, util
+from astroid import bases, decorators, helpers, protocols, util 
+from typing import ExceptionGroup
 from astroid.bases import Instance, _infer_stmts
 from astroid.const import _EMPTY_OBJECT_MARKER, Context
 from astroid.context import CallContext, InferenceContext, copy_context
@@ -2644,6 +2645,38 @@ class ExceptHandler(
         if self.type is None or exceptions is None:
             return True
         return any(node.name in exceptions for node in self.type._get_name_nodes())
+
+    @decorators.raise_if_nothing_inferred
+    def _infer(self, context: InferenceContext | None = None, **kwargs: Any
+    ) -> Generator[InferenceResult, None, InferenceErrorInfo | None]:
+        """Infer the exception type for except and except* clauses."""
+        if isinstance(self.type, Tuple):
+            # except* clause
+            # Infer the exception type as ExceptionGroup[UnionException[SpecifiedExceptionType]]
+            # where SpecifiedExceptionType is the type specified in the except* clause
+            # Handle nesting of exception groups as needed
+            exception_types = []
+            for elt in self.type.elts:
+                elt_types = elt.infer(context=context)
+                exception_types.append(next(elt_types))
+            
+            union_except = util.Uninferable
+            if exception_types:
+                union_except = helpers.object_type(
+                    "UnionException",
+                    types=exception_types,
+                    object_type=bases.Instance,
+                )
+            
+            yield helpers.object_type(
+                "ExceptionGroup",
+                types=[union_except],
+                object_type=bases.Instance,
+            )
+        else:
+            # Regular except clause
+            # Infer exception type normally 
+            yield from super().infer(context=context, **kwargs)
 
 
 class For(
