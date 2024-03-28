@@ -2600,10 +2600,42 @@ class ExceptHandler(
     body: list[NodeNG]
     """The contents of the block."""
 
-    assigned_stmts = protocols.excepthandler_assigned_stmts
-    """Returns the assigned statement (non inferred) according to the assignment type.
-    See astroid/protocols.py for actual implementation.
-    """
+    @decorators.raise_if_nothing_inferred
+    def assigned_stmts(
+        self: nodes.ExceptHandler,
+        node: node_classes.AssignedStmtsPossibleNode = None,
+        context: InferenceContext | None = None,
+        assign_path: list[int] | None = None,
+    ) -> Any:
+        from astroid import objects, protocols  # pylint: disable=import-outside-toplevel
+
+        def infer_exception_group(exc_type):
+            if isinstance(exc_type, nodes.Name) and exc_type.name == 'ExceptionGroup':
+                contained_types = []
+                for arg in exc_type.args:
+                    for inferred in arg.infer(context):
+                        if isinstance(inferred, nodes.ClassDef):
+                            contained_types.append(inferred.name)
+                if contained_types:
+                    union_type = f"UnionException[{', '.join(contained_types)}]"
+                    return protocols.ExceptionGroup[union_type]
+            return exc_type
+
+        if isinstance(self.type, nodes.Call) and getattr(self.type.func, 'name', None) == 'ExceptionGroup':
+            inferred_type = infer_exception_group(self.type)
+            yield inferred_type
+        else:
+            for assigned in node_classes.unpack_infer(self.type):
+                if isinstance(assigned, nodes.ClassDef):
+                    assigned = objects.ExceptionInstance(assigned)
+                yield assigned
+        
+        return {
+            "node": self,
+            "unknown": node,
+            "assign_path": assign_path,
+            "context": context,
+        }
 
     def postinit(
         self,
@@ -2614,6 +2646,8 @@ class ExceptHandler(
         self.type = type
         self.name = name
         self.body = body
+        
+    from astroid import protocols
 
     def get_children(self):
         if self.type is not None:
