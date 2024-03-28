@@ -542,11 +542,33 @@ def excepthandler_assigned_stmts(
 ) -> Any:
     from astroid import objects  # pylint: disable=import-outside-toplevel
 
-    for assigned in node_classes.unpack_infer(self.type):
-        if isinstance(assigned, nodes.ClassDef):
-            assigned = objects.ExceptionInstance(assigned)
-
-        yield assigned
+    if self.type is None:
+        # Regular except: clause without exception type
+        for assigned in node_classes.unpack_infer(self.name):
+            yield assigned
+    else:
+        # except* clause with exception types
+        exception_types = list(node_classes.unpack_infer(self.type))
+        if any(isinstance(exc_type, nodes.ClassDef) and exc_type.qname() == 'builtins.ExceptionGroup' 
+               for exc_type in exception_types):
+            # Infer an ExceptionGroup with the matching nested exception types
+            matching_exceptions = []
+            for exc_type in exception_types:
+                if isinstance(exc_type, nodes.ClassDef) and exc_type.qname() == 'builtins.ExceptionGroup':
+                    matching_exceptions.extend(get_exception_group_matching_exceptions(exc_type, exception_types))
+                else:
+                    matching_exceptions.append(exc_type)
+            
+            exception_group = objects.ExceptionInstance(nodes.ClassDef('ExceptionGroup', None))
+            exception_group.args = [nodes.List(elts=matching_exceptions)]
+            yield exception_group
+        else:
+            # Regular except: clause, yield inferred exception types
+            for assigned in node_classes.unpack_infer(self.type):
+                if isinstance(assigned, nodes.ClassDef):
+                    assigned = objects.ExceptionInstance(assigned)
+                yield assigned
+        
     return {
         "node": self,
         "unknown": node,
